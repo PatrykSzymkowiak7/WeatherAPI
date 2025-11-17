@@ -15,7 +15,8 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WEATHER_API_KEY": "RX32NQMER9YLVW3NHFY3H427F"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:7174;http://localhost:5165"
