@@ -1,5 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using WeatherAPI.Models;
+using WeatherAPI.Models.DTO;
+using WeatherAPI.Services;
 
 namespace WeatherAPI.Controllers
 {
@@ -7,30 +11,48 @@ namespace WeatherAPI.Controllers
     [ApiController]
     public class WeatherController : ControllerBase
     {
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _config;
+        private readonly IWeatherService _weatherService;
 
-        public WeatherController(IHttpClientFactory httpClientFactory, IConfiguration config)
+        public WeatherController(IWeatherService weatherService)
         {
-            _httpClientFactory = httpClientFactory;
-            _config = config;
+            _weatherService = weatherService;
         }
 
-        [HttpGet("{city}")]
-        public async Task<IActionResult> GetWeather(string city)
+        [HttpGet]
+        public async Task<IActionResult> GetWeather([FromQuery] WeatherRequestDto request)
         {
-            var apiKey = _config["WEATHER_API_KEY"];
-            if (string.IsNullOrEmpty(apiKey))
-                return BadRequest("API Key is not configured.");
+            try
+            {
+                if(!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
 
-            var client = _httpClientFactory.CreateClient();
-            var url = $"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}?unitGroup=metric&key={apiKey}&contentType=json";
-            var response = await client.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
-                return BadRequest("Could not fetch weather data");
+                var result = await _weatherService.GetWeatherAsync(request.City);
 
-            var json = await response.Content.ReadAsStringAsync();
-            return Content(json, "application/json");
+                if (result == null)
+                    return NotFound(new
+                    {
+                        error = "City not found",
+                        request.City
+                    });
+
+                var dto = new WeatherResponseDto
+                {
+                    City = result.City,
+                    Temperature = result.Temperature,
+                    Conditions = result.Conditions,
+                    Humidity = result.Humidity
+                };
+
+                return Ok(result);
+            }
+            catch(Exception ex)
+            {
+                return Problem(
+                    detail: ex.Message,
+                    statusCode: 500);
+            }
         }
     }
 }
