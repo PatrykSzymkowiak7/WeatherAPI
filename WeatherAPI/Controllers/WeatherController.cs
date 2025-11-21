@@ -45,7 +45,7 @@ namespace WeatherAPI.Controllers
                     Humidity = result.Humidity
                 };
 
-                return Ok(result);
+                return Ok(dto);
             }
             catch(Exception ex)
             {

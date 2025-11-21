@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 using System.Text.Json;
 using WeatherAPI.Controllers;
 using WeatherAPI.Models;
@@ -11,20 +12,30 @@ namespace WeatherAPI.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _config;
         private readonly ILogger<WeatherService> _logger;
+        private readonly IDatabase _redisDb;
 
-        public WeatherService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<WeatherService> logger)
+        public WeatherService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<WeatherService> logger, IConnectionMultiplexer redis)
         {
             _httpClientFactory = httpClientFactory;
             _config = config;
             _logger = logger;
+            _redisDb = redis.GetDatabase();
         }
 
         public async Task<WeatherInfo?> GetWeatherAsync(string city)
         {
-            _logger.LogInformation("Received request for weather in city: {City}", city);
+            _logger.LogInformation("Received request for weather in city: {0}", city);
 
             try
             {
+                var cacheKey = $"weather:{city.ToLower()}";
+                var cached = await _redisDb.StringGetAsync(cacheKey);
+                if(!String.IsNullOrEmpty(cached))
+                {
+                    _logger.LogInformation("Returning weather for {0} from Redis cache", city);
+                    return JsonSerializer.Deserialize<WeatherInfo>(cached);
+                }
+
                 var apiKey = _config["WEATHER_API_KEY"];
                 if (string.IsNullOrEmpty(apiKey))
                     throw new Exception("Missing WEATHER_API_KEY");
@@ -64,6 +75,14 @@ namespace WeatherAPI.Services
                 };
 
                 _logger.LogInformation("Weather data fetched successfully for city: {City}", city);
+
+                await _redisDb.StringSetAsync(
+                    cacheKey, 
+                    JsonSerializer.Serialize(result), 
+                    TimeSpan.FromHours(12));
+
+                _logger.LogInformation("Weather for {City} cached for 12h", city);
+
                 return result;
             }
             catch (HttpRequestException ex)
